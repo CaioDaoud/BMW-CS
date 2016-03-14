@@ -1,0 +1,690 @@
+
+
+#include "bmw.h"
+
+using namespace std;
+
+ 
+
+/**
+ * corresponds to the algorithm init(queryTerms) in the bmw paper
+ */
+bmw::bmw(PostingList** postinglists, unsigned int plists_size, vector<Term> *_terms, Index *_index) {
+	this->curDoc = 0;
+	this->index = _index;
+	this->plists = postinglists;
+	this->plistsSize = plists_size;
+	this->terms = _terms;
+	this->currentPostings = new doc[plists_size];
+	v = new unsigned[10000000];
+
+	for (unsigned int i = 0; i < plists_size; ++i) {
+		postinglists[i]->first(&this->currentPostings[i]);
+	}	
+}
+
+
+
+bmw::~bmw() {
+	
+	delete v;
+	delete[] currentPostings;
+}
+
+int bmw::novoBmw(PostingList** postinglists, unsigned int plists_size, vector<Term> *_terms, Index *_index) {
+	this->curDoc = 0;
+	this->index = _index;
+	this->plists = postinglists;
+	this->plistsSize = plists_size;
+	this->terms = _terms;
+	this->currentPostings = new doc[plists_size];
+	v = new unsigned[10000000];
+
+	for (unsigned int i = 0; i < plists_size; ++i) {
+		postinglists[i]->first(&this->currentPostings[i]);
+	}
+	return 1;
+}	
+
+/**Caio
+ * Retorna o maxBlockScor de um termo na segunda camada.
+ */
+float bmw::nextInSecond(int docID, int atermPos) {
+	//cout <<"atermPos "<< atermPos<<endl;
+	nextShallow_(docID, atermPos);
+	
+	float accum = 0;
+	for(int i=atermPos; i<plistsSize; i++)
+	{	
+		if(terms->at(i).min_score!=0.0)
+			accum += this->plists[i]->getBlockMaxScore();
+	}
+	return accum;
+}
+
+/**Caio
+ * Retorna o maxBlockScor de um termo na segunda camada.
+ */
+float bmw::nextInSecond_(int docID, int atermPos) {
+	float accum = 0;
+	for(int i=atermPos; i<plistsSize; i++)
+	{	
+		if(terms->at(i).min_score!=0.0)
+			accum += this->plists[i]->getBlockMaxScore();
+	}
+	return accum;
+}
+
+
+/**
+ * corresponds to the algorithm next(THETA) in the paper
+ */
+doc* bmw::next(float threshold) {
+	doc *mcurrentPostings ;
+	PostingList** mplists=this->plists;	
+	mcurrentPostings = this->currentPostings;
+	int mplistsSize = this->plistsSize;
+	
+/*TODO: Acho que o processo é interrompido sempre que se atinge o fim da primeira lista.
+Isso deve ser revisto. Como o processamento é OR, deve-se processar até todas as listas serem consumidas
+*/
+
+	/*Move todas as listas com docids que jah foram avaliados	*/
+	for(int i=0; i<mplistsSize; i++) {
+		if(mcurrentPostings[i].doc_id == this->curDoc) {
+			mplists[i]->next(this->curDoc+1, &mcurrentPostings[i]);
+		}
+	}
+	
+	while( true ) {
+		/*Ordena os listas invertidas por docid*/
+			//sortPostings();
+		{
+		
+			doc docTemp;
+			int i, j;
+			
+			//printf("\t ========================================>>> = %d\n", mplistsSize);
+			for(i = 1; i < mplistsSize; i++)    {
+				docTemp = mcurrentPostings[i];
+				j = i-1;
+				while(j>=0 && docTemp.doc_id < mcurrentPostings[j].doc_id )
+				{
+					mcurrentPostings[j+1] = mcurrentPostings[j];
+					j = j-1;
+				}
+				if(j != i-1) {
+				  PostingList *plistTemp;
+				  Term termTemp;
+				  plistTemp = (mplists[i]);
+				  termTemp = (*terms)[i];
+				  int x;
+				  for(x = i-1; x > j; x--) {
+					mplists[x+1] = mplists[x];
+					(*terms)[x+1] = (*terms)[x];
+				  }
+				  mplists[x+1] = plistTemp;
+				  (*terms)[x+1] = termTemp;
+				  mcurrentPostings[x+1] = docTemp;
+				}
+			 }
+		}
+
+		/*Seleciona o termo que o upperbound acumulado supera o threshold*/
+		int pTermPos = findPivotTerm(threshold);
+
+		/*Posicao negativa significa que nao achou nenhum pivot. Nenhum elemento restante da lista podem ultrapassa-lo*/
+		if (pTermPos < 0) return NULL;
+
+		/*Seleciona o docid pivot*/
+		unsigned int pivot = mcurrentPostings[pTermPos].doc_id;
+
+	
+
+
+		/*Fim da postingList*/
+		if ( pivot == PostingList::END_OF_LIST_DOC_ID()) return NULL;
+
+		/*Move superficialmente o ponteiro das listas invertidas para o bloco do docid candidato*/
+		nextShallow(pivot, pTermPos);/**(docID, Possição na lista de termos para saber uqla skiplist percorrer)*/
+
+		
+		if(checkBlockMax(threshold, pTermPos)) {
+			/*Candidato a ser avaliado*/
+			if (mcurrentPostings[0].doc_id == pivot) {
+				this->curDoc = pivot;
+
+				return mcurrentPostings;
+			}
+			else {
+				/*Não superou o threshold*/
+				unsigned int next_docid = currentPostings[pTermPos].doc_id;
+
+				/*Move the postinglists with docid < pivot*/
+				int optimalTerm = pickTerm(pTermPos, next_docid);
+
+				/*Move the list with the lower docid*/
+				this->plists[optimalTerm]->next(next_docid, &currentPostings[optimalTerm]);
+			}
+		}
+		else {
+			//printf("{não deu}");
+			/*Seleciona o candidato com docid minimo para ser avancado*/
+			unsigned int next_docid = getNewCandidate(pTermPos);
+
+			/*Move the postinglists with docid < pivot*/
+			int optimalTerm = pickTerm(pTermPos+1, next_docid);
+
+			/*Move the list with the lower docid*/
+			this->plists[optimalTerm]->next(next_docid, &currentPostings[optimalTerm]);
+		}
+	}
+}
+
+/**
+ * Operador para percorrer as listas paralelamente e retornar os documentos candidatos
+ * Esta versao esta modificada para levar em consideracao um indice como sendo fracionado
+ * Assim, pode ter a condicao de um documento conter mais termos que constam nessa fracao
+ * FindPivotTermMin e checkBlockMaxMin sao modificacoes considerando esse caso
+ * 
+ */
+doc* bmw::nextMin(float threshold) {
+
+/*TODO: Acho que o processo é interrompido sempre que se atinge o fim da primeira lista.
+Isso deve ser revisto. Como o processamento é OR, deve-se processar até todas as listas serem consumidas
+*/
+
+	/*Move todas as listas com docids que jah foram avaliados*/
+	for(int i=0; i<this->plistsSize; i++) {
+		if(currentPostings[i].doc_id == this->curDoc) {
+			this->plists[i]->next(this->curDoc+1, &currentPostings[i]);
+		}
+	}
+
+	while( true ) {
+		/*Ordena os listas invertidas por docid*/
+		sortPostings();
+		
+		/*Seleciona o termo que o upperbound acumulado supera o threshold*/
+		int pTermPos = findPivotTermMin(threshold);
+
+		/*posicao negativa significa que nao achou nenhum pivot. Nenhum elemento restante da lista podem ultrapassa-lo*/
+		if (pTermPos < 0) return NULL;
+
+		/*Seleciona o docid pivot*/
+		unsigned int pivot = this->currentPostings[pTermPos].doc_id;
+
+		/*Fim da postingList*/
+		if ( pivot == PostingList::END_OF_LIST_DOC_ID()) return NULL;
+
+		/*Move superficialmente o ponteiro das listas invertidas para o bloco do docid candidato*/
+		nextShallow(pivot, pTermPos);
+
+		bool flag = checkBlockMaxMin(threshold, pTermPos);
+		if(flag) {
+			//printf("{Superou");
+			/*Candidato a ser avaliado*/
+			if (currentPostings[0].doc_id == pivot) {
+				this->curDoc = pivot;
+
+				return currentPostings;
+			}
+			else {
+				/*Não superou o threshold*/
+				unsigned int next_docid = currentPostings[pTermPos].doc_id;
+
+				/*Move the postinglists with docid < pivot*/
+				int optimalTerm = pickTerm(pTermPos, next_docid);
+
+				/*Move the list with the lower docid*/
+				this->plists[optimalTerm]->next(next_docid, &currentPostings[optimalTerm]);
+			}
+		}
+		else {
+			//printf("{não deu}");
+			/*Seleciona o candidato com docid minimo para ser avancado*/
+			unsigned int next_docid = getNewCandidate(pTermPos);
+
+			/*Move the postinglists with docid < pivot*/
+			int optimalTerm = pickTerm(pTermPos+1, next_docid);
+
+			/*Move the list with the lower docid*/
+			this->plists[optimalTerm]->next(next_docid, &currentPostings[optimalTerm]);
+		}
+	}
+}
+
+doc* bmw::secNextMin(float threshold, bmw *secLista, int *termPos, float *upper) {
+
+/*TODO: Acho que o processo é interrompido sempre que se atinge o fim da primeira lista.
+Isso deve ser revisto. Como o processamento é OR, deve-se processar até todas as listas serem consumidas
+*/
+	
+	/*Move todas as listas com docids que jah foram avaliados*/
+	for(int i=0; i<this->plistsSize; i++) {
+		if(currentPostings[i].doc_id == this->curDoc) {
+			this->plists[i]->next(this->curDoc+1, &currentPostings[i]);
+		}
+	}
+
+	while( true ) {
+		/*Ordena os listas invertidas por docid*/
+		sortPostings(secLista);
+		
+		/*Seleciona o termo que o upperbound acumulado supera o threshold*/
+		int pTermPos = findPivotTermMin(threshold);
+
+		/*posicao negativa significa que nao achou nenhum pivot. Nenhum elemento restante da lista podem ultrapassa-lo*/
+		if (pTermPos < 0) return NULL;
+		*termPos = pTermPos;
+		
+		/*Seleciona o docid pivot*/
+		unsigned int pivot = this->currentPostings[pTermPos].doc_id;
+
+		/*Fim da postingList*/
+		if ( pivot == PostingList::END_OF_LIST_DOC_ID()) return NULL;
+
+		/*Move superficialmente o ponteiro das listas invertidas para o bloco do docid candidato*/
+		nextShallow(pivot, pTermPos);
+
+		//bool flag = checkBlockMaxMin(threshold, pTermPos, secLista, pivot);
+		bool flag = checkBlockMaxMin(threshold, pTermPos, secLista, &upper);
+		//bool flag = checkBlockMaxMin(threshold, pTermPos);
+		if(flag) {
+			//cout << "{Superou" << endl;
+			
+			/*Candidato a ser avaliado*/
+			if (currentPostings[0].doc_id == pivot) {
+				this->curDoc = pivot;
+				return currentPostings;
+			}
+			else {
+				/*Não superou o threshold*/
+				unsigned int next_docid = currentPostings[pTermPos].doc_id;
+
+				/*Move the postinglists with docid < pivot*/
+				int optimalTerm = pickTerm(pTermPos, next_docid);
+
+				/*Move the list with the lower docid*/
+				this->plists[optimalTerm]->next(next_docid, &currentPostings[optimalTerm]);
+			}
+		}
+		else {
+			//cout << "Não Superou" << endl;
+			/*Seleciona o candidato com docid minimo para ser avancado*/
+			unsigned int next_docid = getNewCandidate(pTermPos);
+
+			/*Move the postinglists with docid < pivot*/
+			int optimalTerm = pickTerm(pTermPos+1, next_docid);
+
+			/*Move the list with the lower docid*/
+			this->plists[optimalTerm]->next(next_docid, &currentPostings[optimalTerm]);
+		}
+	}
+}
+
+///Distribição blockMaxScore da skipLIst
+inline void bmw::DistBlockMaxScore(unsigned int i){
+	float blockMaxScore=0;
+	do{
+			blockMaxScore = this->plists[i]->nextShallow_todos();
+			cout<<", "<< blockMaxScore;
+	}while(blockMaxScore < 0);
+}
+
+
+inline void bmw::nextShallow(unsigned int docid, int atermPos){
+	for(int i=0; i<=atermPos; i++){
+			this->plists[i]->nextShallow(docid);
+	}
+}
+
+
+inline void bmw::nextShallow_(unsigned int docid, int atermPos){
+	
+	for(int i=atermPos; i<plistsSize; i++){
+		if(this->terms->at(i).min_score!=0.0){
+			//cout<< "min_score"<< terms->at(i).min_score << endl;
+		    this->plists[i]->nextShallow(docid, 0);
+		}
+	}
+	}
+
+
+inline bool bmw::checkBlockMax(float threshold, int atermPos)
+{
+	float accum = 0;
+	for(int i=0; i<=atermPos; i++)
+	{
+		accum += this->plists[i]->getBlockMaxScore();
+	}
+
+	return (accum > threshold);
+}
+
+/**Modificacao do checkBlockMax original, soma o score maximo com o score minimo
+ * das listas restantes. Isso pq como o indice eh fracionado pode ocorrer o caso
+ * de este nao ter determinado documento em todas listas da fracao
+ * */
+inline bool bmw::checkBlockMaxMin(float threshold, int atermPos)
+{
+	float accum = 0;
+	for(int i=0; i<=atermPos; i++)
+	{
+		accum += this->plists[i]->getBlockMaxScore();
+	}
+	/**** PARA TESTAR O TWO-PHASE ****/
+	for(int i=atermPos+1; i < this->plistsSize; i++)
+	{
+		accum += this->plists[i]->getBlockMinScore();
+	}
+	/*********************************/
+
+	return (accum > threshold);
+}
+
+inline bool bmw::checkBlockMaxMin(float threshold, int atermPos, bmw *secLista, float **up)
+{
+	float accum = 0, aux =0;
+	for(int i=0; i<=atermPos; i++)
+	{
+		accum += this->plists[i]->getBlockMaxScore();
+	}
+	aux = accum;
+	
+	/**** PARA TESTAR O TWO-PHASE ****/
+	for(int i=atermPos+1; i < this->plistsSize; i++)
+	{
+		accum += this->plists[i]->getBlockMinScore();
+	}
+	/*********************************/
+	//cout << "Acumulador " << accum << endl;
+	/**
+	if(accum > threshold){
+		accum = aux;
+		accum += secLista->nextInSecond(currentPostings[0].doc_id, atermPos+1);
+		//cout << "Acumulador2 " << accum << endl;
+		
+	}
+	/**/
+	**up = (accum-aux);
+	//cout << "Acumulador up " << *up << endl;
+
+	return (accum > threshold);
+}
+
+inline unsigned int bmw::getNewCandidate(int atermPos)
+{
+	unsigned int mindoc = this->plists[0]->getDocBlockBoundary();
+	unsigned int doc;
+
+	/*Select the lower docid between the blocks boundaries of the lists already checked*/
+	for(int i=1; i<=atermPos; i++)
+	{
+		if(mindoc > this->plists[i]->getDocBlockBoundary())
+			 mindoc = this->plists[i]->getDocBlockBoundary();
+	}
+
+	/*Select the lower docid between the lists not checked*/
+	for(int i=atermPos+1; i<this->plistsSize; i++)
+	{
+		if(mindoc > currentPostings[i].doc_id)
+			 mindoc = currentPostings[i].doc_id;
+	}
+
+	/*Return the lower docid found*/
+	return mindoc;
+}
+
+/**
+ * corresponds to the algorithm findPivotTerm in the bmw paper
+ */
+inline int bmw::findPivotTerm(float threshold) {
+	float accum = 0;
+	for (unsigned int i = 0; i < this->plistsSize; ++i) {
+
+		//Utilizando o maxScore da propria lista invertida
+		accum += this->plists[i]->getMaxScore();
+
+		//Retorna o ponto onde o upperbound acumulado supera o threshold
+		if (accum > threshold){
+			//Avanca ate atingir a ultima postinglist com o mesmo docid
+			while(i+1 < this->plistsSize && currentPostings[i+1].doc_id == currentPostings[i].doc_id)	i++;
+
+			return i;
+		}
+	}
+	return -1;
+}
+
+/**
+ * Modificacao do findPivotTerm original, soma o score maximo com o score minimo
+ * das listas restantes. Isso pq como o indice eh fracionado pode ocorrer o caso
+ * de este nao ter determinado documento em todas listas da fracao
+ * */
+inline int bmw::findPivotTermMin(float threshold) {
+	float accum = 0;
+	float accum_min = 0;
+	for (unsigned int i = 0; i < this->plistsSize; ++i) {
+
+		/*Utilizando o maxScore da propria lista invertida*/
+		accum += this->plists[i]->getMaxScore();
+		accum_min = 0;
+		
+		for(int j = i+1; j < this->plistsSize; ++j) {
+			accum_min += this->terms->at(j).min_score;
+		}
+		//--printf("###### Acumulador %f  min %f threshold %f\n", accum, accum_min, threshold);
+		
+		/*Retorna o ponto onde o upperbound acumulado supera o threshold*/
+		if (accum+accum_min > threshold){
+			/*Avanca ate atingir a ultima postinglist com o mesmo docid*/
+			while(i+1 < this->plistsSize && currentPostings[i+1].doc_id == currentPostings[i].doc_id)	i++;
+
+			return i;
+		}
+	}
+	return -1;
+}
+
+/**
+ * corresponds to the pickTerm auxiliary function in the WAND paper
+ */
+inline int bmw::pickTerm(int pTermPos, int next_docid) {
+	int optimalTerm = 0;
+
+	for(int atermPos = 1; atermPos < pTermPos; atermPos++) {
+		if(currentPostings[atermPos].doc_id >= next_docid)	break;
+		if( this->terms->at(atermPos).idf > this->terms->at(optimalTerm).idf)
+			optimalTerm = atermPos;
+	}
+
+	return optimalTerm;
+}
+
+/**
+ *	corresponds to the sort auxiliary function in the bmw paper
+ *  CMD--Ordena as listas invertidas por docid
+ *
+inline void bmw::sortPostings() {
+//	insertionSort();
+	int size = this->plistsSize;
+	doc docTemp;
+	PostingList *plistTemp;
+	Term termTemp;
+	int i, j;
+	
+	
+	//fprintf(this->fpGabarito, "\t ========================================>>> = %d\n", size);
+	for(i = 1; i < size; i++)	{
+		docTemp = currentPostings[i];
+		plistTemp = (plists[i]);
+		termTemp = (*terms)[i];
+		j = i-1;
+		while(j>=0 && docTemp.doc_id < currentPostings[j].doc_id )
+		{
+			currentPostings[j+1] = currentPostings[j];
+			(plists)[j+1] = plists[j];
+			(*terms)[j+1] = (*terms)[j];
+			
+			j = j-1;
+		}
+		if(j != i-1) {
+			currentPostings[j+1] = docTemp;
+			plists[j+1] = plistTemp;
+			(*terms)[j+1] = termTemp;
+		}
+	}
+}*/
+
+/**
+ * nova 1º
+ * 
+void bmw::sortPostings() {
+//    insertionSort();
+    int size = this->plistsSize;
+    doc docTemp;
+    int i, j;
+    
+    //fprintf(this->fpGabarito, "\t ========================================>>> = %d\n", size);
+    for(i = 1; i < size; i++)    {
+        docTemp = currentPostings[i];
+        j = i-1;
+        while(j>=0 && docTemp.doc_id < currentPostings[j].doc_id )
+        {
+            currentPostings[j+1] = currentPostings[j];
+            j = j-1;
+        }
+        if(j != i-1) {
+          PostingList *plistTemp;
+          Term termTemp;
+          plistTemp = (plists[i]);
+          termTemp = (*terms)[i];
+          currentPostings[j+1] = docTemp;
+          int x;
+          for(x = i-1; x > j; x--) {
+            plists[x+1] = plists[x];
+            (*terms)[x+1] = (*terms)[x];
+          }
+          plists[x+1] = plistTemp;
+          (*terms)[x+1] = termTemp;
+        }
+    }
+}*/
+
+/**
+ * nova 2º
+ */
+inline void bmw::sortPostings() {
+
+//    insertionSort();
+    int size = this->plistsSize;
+    doc docTemp;
+    int i, j;
+    
+    //fprintf(this->fpGabarito, "\t ========================================>>> = %d\n", size);
+    for(i = 1; i < size; i++)    {
+        docTemp = currentPostings[i];
+        j = i-1;
+        while(j>=0 && docTemp.doc_id < currentPostings[j].doc_id )
+        {
+            currentPostings[j+1] = currentPostings[j];
+            j = j-1;
+        }
+        if(j != i-1) {
+          PostingList *plistTemp;
+          Term termTemp;
+          plistTemp = (plists[i]);
+          termTemp = (*terms)[i];
+          int x;
+          for(x = i-1; x > j; x--) {
+            plists[x+1] = plists[x];
+            (*terms)[x+1] = (*terms)[x];
+          }
+          plists[x+1] = plistTemp;
+          (*terms)[x+1] = termTemp;
+          currentPostings[x+1] = docTemp;
+        }
+    }
+}
+
+inline void bmw::sortPostings(bmw *secLista) {
+
+//    insertionSort();
+    int size = this->plistsSize;
+    doc docTemp;
+    doc docTemp2;
+    int i, j;
+    
+    //fprintf(this->fpGabarito, "\t ========================================>>> = %d\n", size);
+    for(i = 1; i < size; i++)    {
+        docTemp = currentPostings[i];
+        docTemp2 = secLista->currentPostings[i];
+        
+        j = i-1;
+        while(j>=0 && docTemp.doc_id < currentPostings[j].doc_id )
+        {
+            currentPostings[j+1] = currentPostings[j];
+            secLista->currentPostings[j+1] = secLista->currentPostings[j];
+            j = j-1;
+        }
+        if(j != i-1) {
+          PostingList *plistTemp;
+          PostingList *plistTemp2;
+          Term termTemp;
+          Term termTemp2;
+          plistTemp = (plists[i]);
+          plistTemp2 = (secLista->plists[i]);
+          termTemp = (*terms)[i];
+		  int x;
+          for(x = i-1; x > j; x--) {
+            plists[x+1] = plists[x];
+            secLista->plists[x+1] = secLista->plists[x];
+            (*terms)[x+1] = (*terms)[x];
+          }
+          plists[x+1] = plistTemp;
+          secLista->plists[x+1] = plistTemp2;
+          (*terms)[x+1] = termTemp;
+          currentPostings[x+1] = docTemp;
+          secLista->currentPostings[x+1] = docTemp2;
+        }
+    }
+}
+
+/**
+ *	primeiro teste (nao foi bom)
+ *
+inline void bmw::sortPostings() {
+//	insertionSort();
+	int size = this->plistsSize;
+	doc docTemp;
+	PostingList *plistTemp;
+	Term termTemp;
+	int i, j;
+	int posmenor;
+	
+	//cout << "======================== "  << size ;
+	for(i = 0; i < size-1; i++)	{
+		posmenor=i;
+		for(j=i+1; j<size; j++) {
+		  if(currentPostings[j].doc_id < currentPostings[posmenor].doc_id) { 
+		     posmenor=j;
+		  }
+	    }
+		if(posmenor != i) {
+			docTemp = currentPostings[i];
+			plistTemp = (plists[i]);
+			termTemp = (*terms)[i];
+			currentPostings[i] =  currentPostings[posmenor];
+			plists[i] =  plists[posmenor];
+			(*terms)[i] = (*terms)[posmenor];
+			 currentPostings[posmenor]=docTemp ;
+			plists[posmenor]=plistTemp;
+			(*terms)[posmenor]=termTemp;
+		}
+	}
+ * 
+}*/
+
+
+

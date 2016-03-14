@@ -1,0 +1,243 @@
+/*
+ * QueryProcessor.h
+ *
+ *  Created on: 03/08/2010
+ *      Author: felipe
+ */
+
+#ifndef QUERYPROCESSOR_H_
+#define QUERYPROCESSOR_H_
+
+#include <iostream>
+#include <fstream>
+#include "queryparser.h"
+#include "DocsInfo.h"
+#include "parser/parse_query.h"
+#include "Vocabulario.h"
+#include "Index.h"
+#include "ServerSocket.h"
+#include "Socket.h"
+#include "SocketException.h"
+#include <tr1/unordered_map>
+#include <pthread.h>
+#include <semaphore.h>
+
+using namespace std;
+using namespace std::tr1;
+
+typedef struct Term {
+    int term_id;
+    int tf;
+    float idf;
+    float min_score;
+    float max_score;
+} Term;
+
+typedef struct feature {
+	double idfWholedoc;
+	double idfText;
+	double idfTitle;
+	double idfAnchor;
+	double idfUrl;
+
+	double tfWholedoc;
+	double tfText;
+	double tfTitle;
+	double tfAnchor;
+	double tfUrl;
+
+	double lenWholedoc;
+	double lenText;
+	double lenTitle;
+	double lenAnchor;
+	double lenUrl;
+
+	double bm25Wholedoc;
+	double bm25Text;
+	double bm25Title;
+	double bm25Anchor;
+	double bm25Url;
+
+	double vetWholedoc;
+	double vetText;
+	double vetTitle;
+	double vetAnchor;
+	double vetUrl;
+
+	double pagerank;
+	double len_url;
+	double num_slash;
+}Feature;
+
+
+
+typedef struct finalResult {
+	unsigned int doc_id;
+	int num_termos;
+	float wholedocScore;
+	float anchorScore;
+	float textScore;
+	float titleScore;
+	float urlScore;
+	float finalScore;
+	double pagerank;
+	int lenUrl;
+	int numSlash;
+	finalResult(unsigned int id, float _wholedocScore, float _anchorScore, float _textScore, float _titleScore, float _urlScore, double _pagerank, int _lenUrl, int _numSlash) :
+	    doc_id(id),
+	    wholedocScore(_wholedocScore), 
+	    anchorScore(_anchorScore), 
+	    textScore(_textScore), 
+	    titleScore(_titleScore),
+	    urlScore(_urlScore),
+	    finalScore(0),
+	    pagerank(_pagerank),
+	    lenUrl(_lenUrl),
+	    numSlash(_numSlash)
+	    {
+	}
+
+} finalResult ;
+
+typedef struct result {
+	int doc_id;
+	int num_termos;
+    int mask_termos;
+	float score;
+	float upper_score;
+	bool operator<( const result & d ) const {
+	       return score > d.score;
+	}
+	bool operator>( const result & d ) const {
+		       return score > d.score;
+	}
+
+	result() {
+	}
+
+	result(int d, float _score, float _upper_score, int nt) {
+		doc_id = d;
+		score = _score;
+		upper_score = _upper_score;
+		num_termos = nt;
+        mask_termos = 0;
+	}
+
+	result(int d, float _score, int nt) {
+		doc_id = d;
+		score = _score;
+		upper_score = _score;
+		num_termos = nt;
+        mask_termos = 0;
+	}
+} result;
+
+class queryprocessor {
+public:
+	queryprocessor(Index *_utiIndex, Index *_smallIndex, Index *_wholedocIndex, Index *_textIndex, Index *_titleIndex, Index *_anchorIndex, Index *_urlIndex, DocsInfo *_docsInfo, Vocabulario *_voc, char *file_gabarito, int _process_mode, int _index_type) 
+//	queryprocessor(Index *_textIndex, Index *_titleIndex, Index *_anchorIndex, Index *_urlIndex, DocsInfo *_docsInfo, Vocabulario *_voc, char *file_gabarito, int _process_mode, int _index_type) 
+	{
+		this->utiIndex = _utiIndex;
+		this->wholedocIndex = _wholedocIndex;
+		this->smallIndex = _smallIndex;
+		this->textIndex = _textIndex;
+		this->anchorIndex = _anchorIndex;
+		this->titleIndex = _titleIndex;
+		this->urlIndex = _urlIndex;
+		this->docsInfo = _docsInfo;
+
+		this->formula = 0;
+		this->voc = _voc;
+		this->C = 4;
+		this->F = 14;
+		this->RESULT_HEAP_SIZE = 20;
+		this->query_log.open("query_log.txt", ios::app | ios::out);
+		this->query_log << "-------------------------" << endl;
+		this->id_consulta = 0;
+		this->fpGabarito = fopen(file_gabarito, "w");
+		this->process_mode = _process_mode;
+		this->index_type = _index_type;
+	}
+
+	~queryprocessor() {
+		this->query_log.close();
+		fclose(this->fpGabarito);
+	}
+
+	int getC() { return this->C; }
+	int getF() { return this->F; }
+	int getResultHeapSize() { return this->RESULT_HEAP_SIZE; }
+	void setResultHeapSize(int _new_size) { this->RESULT_HEAP_SIZE = _new_size; }
+	void setC(int _c) { this->C = _c; }
+	void setF(int _f) { this->F = _f; }
+	void processQuery(const string query);
+	void processQuery(const string query, ServerSocket *socket);//verificar
+
+	void processQueryUTI(const string query);
+
+	void setFormula(int _f) {  this->formula = _f;	}
+
+private:
+	//file to log all queries
+	ofstream query_log;
+
+	//C constant defined in the WAND paper
+	int C;
+
+	//F constant defined in the WAND paper
+	int F;
+
+	// number of results in the processing heap
+	int RESULT_HEAP_SIZE;
+
+	// processing mode 1->OR 2->AND 3->TWO_PHASE
+	int process_mode;
+
+	// index type 1->UTI 2->BM25
+	int index_type;
+
+	//Formula a ser utilizada. 0 -> score primario; (1-10) -> Formula da GP
+	int formula;
+
+	Vocabulario *voc;
+	queryparser query_parser;
+	SimpleWBRQueryParser simple_query_parser;
+
+	Index *utiIndex;
+	Index *wholedocIndex;
+	Index *smallIndex;
+	Index *textIndex;
+	Index *titleIndex;
+	Index *anchorIndex;
+	Index *urlIndex;
+
+	DocsInfo *docsInfo;
+	float ideal_doc_score;
+
+	vector<Term>* preProcessQuery(const string &query, int &size);
+
+	inline float calculateDocumentScoreUTI(Index *index, const doc* postingArray, vector<Term> *terms, size_t &size);
+	inline float calculateDocumentScoreBM25(Index *index, const doc* postingArray, vector<Term> *terms, size_t &size);
+
+	vector<result>* processQueryforIndexAND(Index *index, int number_of_terms, vector<Term> &terms, int &number_of_results, float &ideal_doc_score);
+	vector<result>* processQueryforIndexOR(Index *index, int number_of_terms, vector<Term> &terms, int &number_of_results, float &ideal_doc_score);
+
+	vector<result>* selectCandidateDocsSmallIndex(Index *index, int number_of_terms, vector<Term> &terms, int &number_of_results, float &ideal_doc_score);
+	void processCandidateDocsEntireIndex(vector<result> *cadidate_results, Index *index, const int number_of_terms, vector<Term> *terms);
+
+	void pos_gp(vector<result>* utiResults, const int number_of_terms, vector<Term> *terms);
+
+	int id_consulta;
+	FILE *fpGabarito;
+
+	FILE *fpResults, *fpUniao;
+
+	inline void QUERY_LOG(string info) {
+		this->query_log << info;
+		this->query_log.flush();
+	}
+	inline void combineScore(finalResult &x);
+};
+
+#endif /* QUERYPROCESSOR_H_ */
+

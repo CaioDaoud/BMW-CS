@@ -1,0 +1,123 @@
+/*
+ * bma.h
+ *
+ *  Created on: 06/08/2010
+ *      Author: felipe
+ */
+
+#ifndef BMA_H_
+#define BMA_H_
+
+#include <vector>
+#include <iostream>
+#include "queryprocessor.h"
+#include "PostingList.h"
+
+using namespace std;
+
+class bma {
+public:
+//	bma();
+	bma(PostingList** postinglists, unsigned int plists_size, vector<Term> *_terms);
+	~bma();
+	/**
+	 * corresponds to the algorithm next(THETA) in the paper WAND
+	 */
+	doc* next(float threshold);
+
+	/**
+	 * corresponds to the algorithm nextShallow(docid) in the paper of Block Max WAND
+	 */
+	int nextShallow(unsigned int docid, int atermPos);
+
+	bool checkBlockMax(float threshold, int atermPos);
+
+	unsigned int getNewCandidate(int atermPos);
+
+	void finish() {    
+		for (unsigned int i = 0; i < plistsSize; ++i) {
+			cout << "cont: " << plists[i]->cont << endl;
+			cout << "size_list: " << plists[i]->size_list << endl;
+		}
+	}
+
+private:
+    vector<Term> *terms;
+	PostingList** plists;
+	unsigned int plistsSize;
+	bool first;
+
+	// vetor que indica o documento atual pra cada postinglist
+	doc *currentPostings;
+	unsigned int curDoc;
+
+	/**
+	 *	corresponds to the sort auxiliary function in the bma paper
+	 */
+	void sortPostings();
+	/**
+	 * corresponds to the pickTerm auxiliary function in the bma paper
+	 */
+	int pickTerm(int pTermPos, int next_docid);
+	/**
+	 * corresponds to the algorithm findPivotTerm in the bma paper
+	 */
+	int findPivotTerm(float threshold);
+
+	inline void sortPlists() {
+		unsigned int size = this->plistsSize;
+		PostingList *plistTemp;
+		Term termTemp;
+		int i;
+		int j;
+		for(i = 1; i < size; i++){
+			plistTemp = (plists[i]);
+			termTemp = (*terms)[i];
+			j = i-1;
+			while(j>=0 && termTemp.idf > (*terms)[j].idf ) {
+				(plists)[j+1] = plists[j];
+				(*terms)[j+1] = (*terms)[j];
+				j = j-1;
+			}
+							  
+			plists[j+1] = plistTemp;
+			(*terms)[j+1] = termTemp;
+		}	
+	}
+
+	inline void insertionSort() {
+		int size = this->plistsSize;
+		doc docTemp;
+		PostingList *plistTemp;
+		Term termTemp;
+		float upperboundTemp;
+		int i, j;
+		for(i = 1; i < size; i++)	{
+			docTemp = currentPostings[i];
+			plistTemp = (plists[i]);
+			termTemp = (*terms)[i];
+			j = i-1;
+			while(j>=0 && docTemp.doc_id < currentPostings[j].doc_id )
+			{
+				currentPostings[j+1] = currentPostings[j];
+				(plists)[j+1] = plists[j];
+				(*terms)[j+1] = (*terms)[j];
+				
+				j = j-1;
+			}
+			currentPostings[j+1] = docTemp;
+			plists[j+1] = plistTemp;
+			(*terms)[j+1] = termTemp;
+		}
+	}
+
+	void printCurrentPostings() {
+		for (unsigned int i = 0; i < plistsSize; ++i) {
+			cout << currentPostings[i].doc_id << "  ";
+		}
+		cout << endl;
+	}
+
+};
+
+#endif /* bma_H_ */

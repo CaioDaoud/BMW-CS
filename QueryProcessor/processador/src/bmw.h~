@@ -1,0 +1,121 @@
+/*
+ * bmw.h
+ *
+ *  Created on: 06/08/2010
+ *      Author: felipe
+ */
+
+#ifndef BMW_H_
+#define BMW_H_
+
+#include <vector>
+#include <iostream>
+#include "queryprocessor.h"
+#include "PostingList.h"
+
+
+using namespace std;
+
+class bmw {
+public:
+	bmw(PostingList** postinglists, unsigned int plists_size, vector<Term> *_terms, Index *_index);
+	~bmw();
+	/**
+	 * corresponds to the algorithm next(THETA) in the paper WAND
+	 */
+	doc* next(float threshold);
+
+	/**
+	 * Operador para percorrer as listas paralelamente e retornar os documentos candidatos
+	 * Esta versao esta modificada para levar em consideracao um indice como sendo fracionado
+	 * Assim, pode ter a condicao de um documento conter mais termos que constam nessa fracao
+	 * FindPivotTermMin e checkBlockMaxMin sao modificacoes considerando esse caso
+	 * 
+	 */
+	doc* nextMin(float threshold);
+	doc* secNextMin(float threshold, bmw *secLista, int *termPos, float *upper);
+
+	/**
+	 * corresponds to the algorithm nextShallow(docid) in the paper of Block Max WAND
+	 */
+	void nextShallow(unsigned int docid, int atermPos);
+	void nextShallow_(unsigned int docid, int atermPos);
+	bool checkBlockMax(float threshold, int atermPos);
+	inline bool checkBlockMaxMin(float threshold, int atermPos);
+	inline bool checkBlockMaxMin(float threshold, int atermPos, bmw *secLista, float **up);
+
+	unsigned int getNewCandidate(int atermPos);
+	float nextInSecond(int docID, int aterPos); 
+	float nextInSecond_(int docID, int atermPos);
+	inline void DistBlockMaxScore(unsigned int i);
+	int novoBmw(PostingList** postinglists, unsigned int plists_size, vector<Term> *_terms, Index *_index);
+
+	void finish() {    
+		for (unsigned int i = 0; i < plistsSize; ++i) {
+			  cout << "cont: " << plists[i]->cont << endl;
+			  cout << "size_list: " << plists[i]->size_list << endl;
+		}
+	}
+
+private:
+	Index *index;
+	vector<Term> *terms;
+	PostingList** plists;
+	unsigned int plistsSize;
+
+	// vetor que indica o documento atual pra cada postinglist
+	doc *currentPostings;
+	unsigned int curDoc;
+	unsigned int *v;
+	
+
+	/**
+	 *	corresponds to the sort auxiliary function in the bmw paper
+	 */
+	void sortPostings();
+	void sortPostings(bmw *secLista);
+	/**
+	 * corresponds to the pickTerm auxiliary function in the bmw paper
+	 */
+	int pickTerm(int pTermPos, int next_docid);
+	/**
+	 * corresponds to the algorithm findPivotTerm in the bmw paper
+	 */
+	int findPivotTerm(float threshold);
+	int findPivotTermMin(float threshold);
+
+	inline void insertionSort() {
+		int size = this->plistsSize;
+		doc docTemp;
+		PostingList *plistTemp;
+		Term termTemp;
+		int i, j;
+		for(i = 1; i < size; i++)	{
+			docTemp = currentPostings[i];
+			plistTemp = (plists[i]);
+			termTemp = (*terms)[i];
+			j = i-1;
+			while(j>=0 && docTemp.doc_id < currentPostings[j].doc_id )
+			{
+				currentPostings[j+1] = currentPostings[j];
+				(plists)[j+1] = plists[j];
+				(*terms)[j+1] = (*terms)[j];
+				
+				j = j-1;
+			}
+			currentPostings[j+1] = docTemp;
+			plists[j+1] = plistTemp;
+			(*terms)[j+1] = termTemp;
+		}
+	}
+
+	void printCurrentPostings() {
+		for (unsigned int i = 0; i < plistsSize; ++i) {
+			cout << currentPostings[i].doc_id << "  ";
+		}
+		cout << endl;
+	}
+
+};
+
+#endif /* bmw_H_ */

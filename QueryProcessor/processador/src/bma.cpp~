@@ -1,0 +1,278 @@
+
+#include "bma.h"
+
+using namespace std;
+
+/**
+ * corresponds to the algorithm init(queryTerms) in the bma paper
+ */
+bma::bma(PostingList** postinglists, unsigned int plists_size, vector<Term> *_terms) {
+	this->curDoc = 0;
+	this->plists = postinglists;
+	this->plistsSize = plists_size;
+	this->terms = _terms;
+	this->first = false;
+	currentPostings = new doc[plists_size];
+
+	if (plistsSize > 1) sortPlists(); /*Ordena por IDF. Maior idf tem lista menor*/
+
+	/*Pega o primeiro elementos de todas as listas, EXCETO da primeira*/
+	for (unsigned int i = 1; i < plists_size; ++i) {
+		postinglists[i]->first(&currentPostings[i]);
+		//		currentPostings[i] = *aux; //TODO: copiando, podia passar o ponteiro
+		if (this->curDoc < currentPostings[i].doc_id)  
+		    this->curDoc = currentPostings[i].doc_id; //pega maior documento
+
+	}
+}
+
+bma::~bma() {
+	delete[] currentPostings;
+}
+
+/**
+ * corresponds to the algorithm next(THETA) in the paper
+ */
+ /*
+doc* bma::next(float threshold) {
+
+	//avança a menor lista
+	this->plists[0]->next(this->curDoc, &currentPostings[0]);
+	this->curDoc = currentPostings[0].doc_id;
+
+	while( this->curDoc != PostingList::END_OF_LIST_DOC_ID() ) {
+
+		//Posiciona o ponteiro de superficie sobre o bloco do docid candidato
+		nextShallow(this->curDoc, this->plistsSize-1);
+
+		bool flag = checkBlockMax(threshold, this->plistsSize-1);
+		if(flag)
+		{
+			bool candidate = true;
+			//*Move as listas para o docid candidato
+			for(int i=0; i<this->plistsSize; i++)
+			{
+				if(currentPostings[i].doc_id < this->curDoc)
+				{
+					this->plists[i]->next(this->curDoc, &currentPostings[i]);
+
+					if ( currentPostings[i].doc_id == PostingList::END_OF_LIST_DOC_ID()) return NULL;
+
+					//*Se nao encontrou o docid candidato cancela a avaliacao
+					if(currentPostings[i].doc_id != this->curDoc)
+					{
+						candidate = false;
+						break;
+					}
+				}
+			}
+
+			//*Candidato a ser avaliado
+			if (candidate) {
+				this->curDoc += 1;
+				return currentPostings;
+			}
+			else {
+				this->curDoc = currentPostings[0].doc_id;
+				for(int i=1; i<this->plistsSize; i++)
+				{
+					if(this->curDoc < currentPostings[i].doc_id)
+						this->curDoc = currentPostings[i].doc_id;
+				}
+			}
+		}
+		else {
+			//*Seleciona o candidato com docid minimo para ser avancado
+			this->curDoc = getNewCandidate(this->plistsSize-1);
+
+			//*Move a lista invertida de maior idf (Prove maior salto)
+			this->plists[0]->next(this->curDoc, &currentPostings[0]);
+
+			//*Atualiza o docid candidato
+			this->curDoc = currentPostings[0].doc_id;
+		}
+	}
+
+	return NULL;
+}*/
+
+///caio-
+doc* bma::next(float threshold) {
+
+	//avança a menor lista
+	this->plists[0]->next(this->curDoc, &currentPostings[0]);
+	this->curDoc = currentPostings[0].doc_id;
+	
+	
+	while( this->curDoc != PostingList::END_OF_LIST_DOC_ID() ) {
+		
+		//Posiciona o ponteiro de superficie sobre o bloco do docid candidato
+		nextShallow(this->curDoc, this->plistsSize-1);
+
+		bool flag = checkBlockMax(threshold, this->plistsSize-1);
+		if(flag)
+		{
+			bool candidate = true;
+			//*Move as listas para o docid candidato
+			for(int i=0; i<this->plistsSize; i++)
+			{
+				if(currentPostings[i].doc_id < this->curDoc)
+				{
+					this->plists[i]->next(this->curDoc, &currentPostings[i]);
+
+					if ( currentPostings[i].doc_id == PostingList::END_OF_LIST_DOC_ID()) return NULL;
+
+					//*Se nao encontrou o docid candidato cancela a avaliacao
+					if(currentPostings[i].doc_id != this->curDoc)
+					{
+						candidate = false;
+						break;
+					}
+				}
+			}
+
+			//*Candidato a ser avaliado
+			if (candidate) {
+				this->curDoc += 1;
+				return currentPostings;
+			}
+			else {
+				this->curDoc = currentPostings[0].doc_id;
+				for(int i=1; i<this->plistsSize; i++)
+				{
+					if(this->curDoc < currentPostings[i].doc_id)
+						this->curDoc = currentPostings[i].doc_id;
+				}
+			}
+		}
+		else { ///pega o maior 
+			//*Seleciona o candidato com docid minimo para ser avancado
+			this->curDoc = getNewCandidate(this->plistsSize-1);
+
+			//*Move a lista invertida de maior idf (Prove maior salto)
+			this->plists[0]->next(this->curDoc, &currentPostings[0]);
+
+			//*Atualiza o docid candidato
+			this->curDoc = currentPostings[0].doc_id;
+			//cout<<"curDoc"<< curDoc <<endl;
+		}
+	}
+
+	return NULL;
+}
+
+
+
+
+
+int bma::nextShallow(unsigned int docid, int atermPos)
+{
+	for(int i=0; i<=atermPos; i++)
+	{
+		this->plists[i]->nextShallow(docid);
+	}
+	return 1;
+}
+
+bool bma::checkBlockMax(float threshold, int atermPos)
+{
+	float accum = 0;
+	for(int i=0; i<=atermPos; i++)
+	{
+		accum += this->plists[i]->getBlockMaxScore();
+	}
+
+	return (accum > threshold);
+}
+
+
+
+
+///caio- Pega o maior final de bloco para ser o novo candidato
+unsigned int bma::getNewCandidate(int atermPos)
+{
+	unsigned int mindoc = this->plists[0]->getDocBlockBoundary();
+	unsigned int doc;
+
+	//*Select the lower docid between the blocks boundaries of the lists already checked
+	for(int i=1; i<=atermPos; i++)
+	{
+		if(mindoc > this->plists[i]->getDocBlockBoundary())
+			 mindoc = this->plists[i]->getDocBlockBoundary();
+	}
+
+
+	//*Return the lower docid found
+	return mindoc;
+}
+
+
+
+/*
+unsigned int bma::getNewCandidate(int atermPos)
+{
+	unsigned int mindoc = this->plists[0]->getDocBlockBoundary();
+	unsigned int doc;
+
+	//*Select the lower docid between the blocks boundaries of the lists already checked
+	for(int i=1; i<=atermPos; i++)
+	{
+		if(mindoc > this->plists[i]->getDocBlockBoundary())
+			 mindoc = this->plists[i]->getDocBlockBoundary();
+	}
+
+	//*Select the lower docid between the lists not checked
+	for(int i=atermPos+1; i<this->plistsSize; i++)
+	{
+		if(mindoc > currentPostings[i].doc_id)
+			 mindoc = currentPostings[i].doc_id;
+	}
+
+	//*Return the lower docid found
+	return mindoc;
+}*/
+
+/**
+ * corresponds to the algorithm findPivotTerm in the bma paper
+ */
+inline int bma::findPivotTerm(float threshold) {
+	float accum = 0;
+	for (unsigned int i = 0; i < this->plistsSize; ++i) {
+
+		/*Utilizando o maxScore da propria lista invertida*/
+		accum += this->plists[i]->getMaxScore();
+
+		/*Retorna o ponto onde o upperbound acumulado supera o threshold*/
+		if (accum > threshold){
+			/*Avanca ate atingir a ultima postinglist com o mesmo docid*/
+			while(i+1 < this->plistsSize && currentPostings[i+1].doc_id == currentPostings[i].doc_id)	i++;
+
+			return i;
+		}
+	}
+	return -1;
+}
+
+/**
+ * corresponds to the pickTerm auxiliary function in the WAND paper
+ * We propose a modification. All the postingLists with docid < pivot are moved to a docid>=pivot
+ */
+int bma::pickTerm(int pTermPos, int next_docid) {
+	int optimalTerm = 0;
+
+	for(int atermPos = 1; atermPos < pTermPos; atermPos++) {
+		if(currentPostings[atermPos].doc_id >= next_docid)	break;
+		if( this->terms->at(atermPos).idf > this->terms->at(optimalTerm).idf)
+			optimalTerm = atermPos;
+	}
+
+	return optimalTerm;
+}
+
+/**
+ *	corresponds to the sort auxiliary function in the bma paper
+ */
+inline void bma::sortPostings() {
+	insertionSort();
+}
+

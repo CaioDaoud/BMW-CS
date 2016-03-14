@@ -1,0 +1,41 @@
+#ifndef SNIPPET_H
+#define SNIPPET_H
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define	MAXTAMCONSULTA 150
+#define  MAXTAMTRECHO 300
+
+//inicia tabela de acentos
+void iniciaTblAcento();
+
+//limpa acentos de uma string
+void LimpaAcento(char *txt);
+
+//algoritmo de insercao
+void insercao(int* vet, int tam);
+
+//Faz parse dos elementos da query
+void strParseTermos(char *query, char **termos);
+
+//Recupera o primeiro Token da string
+int getFirstToken(char *str1, char *str2);
+
+//Passa os caracteres da string para minusculas
+void minusculas(char* str);
+
+//Compara duas strings
+int strCom(char *str1, char *str2);
+
+//Encontra a posicao de str2 em str1
+char *strPosTermo(char *str1, char *str2);
+
+//Recupera o conteúdo do documento
+int getContent(char *doc);
+
+//Recupera os snippets
+char * getSnippet(char *content, char *query);
+
+#endif
