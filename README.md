@@ -38,6 +38,7 @@
 3. To index the documents and to split the index.
 
 	I. $cd Try/
+	
 	II. python geraIndice.py <pathColecao> <pathBase> <pathIndice> <Nome do Indice>
 	  $:python geraIndice.py GovTxtTeste/ govTxtBase/ govInd/ govTxt.
 	  //whith this the documents are indexed in one tier, govInd/govTxt.
@@ -48,7 +49,10 @@
 	  
 4. To processe queries.
 ./QueryProcessor <arq.query> <path.word> <file.result> <wand/bmw/cs> <VET/UTI/BM25> <0> <Top-k> <Entire.index> <First.index> <Second.index> <0>
-a. [Wand]  $:./QueryProcessor 1000query GovIndice/govTxt. rankingWand wand BM25 0 10  GovIndice/govTxt. GovIndice/fir_25. 
+
+I. [Wand]  $:./QueryProcessor 1000query GovIndice/govTxt. rankingWand wand BM25 0 10  GovIndice/govTxt. GovIndice/fir_25. 
 GovIndice/sec_25. 0
-b. [BMW]   $:./QueryProcessor 1000query GovIndice/govTxt. rankingBMW  BMW  BM25 0 10  GovIndice/govTxt. GovIndice/fir_25. GovIndice/sec_25. 0
-c. [BMW-CS]$:./QueryProcessor 1000query GovIndice/govTxt. rankingCSP  CS   BM25 0 10  GovIndice/govTxt. GovIndice/fir_25. GovIndice/sec_25. 0
+
+II. [BMW]   $:./QueryProcessor 1000query GovIndice/govTxt. rankingBMW  BMW  BM25 0 10  GovIndice/govTxt. GovIndice/fir_25. GovIndice/sec_25. 0
+
+III. [BMW-CS]$:./QueryProcessor 1000query GovIndice/govTxt. rankingCSP  CS   BM25 0 10  GovIndice/govTxt. GovIndice/fir_25. GovIndice/sec_25. 0
