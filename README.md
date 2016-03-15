@@ -41,16 +41,16 @@
 	
 	II. Indexing documents in one tier, govInd/govTxt.
 	
-	    [python geraIndice.py <pathColecao> <pathBase> <pathIndice> <Nome do Indice>]
+	    [python GeraIndice.py <pathColecao> <pathBase> <pathIndice> <Nome do Indice>]
 	    
-	    $: python geraIndice.py GovTxtTeste/ govTxtBase/ govInd/ govTxt.
+	    $: python GeraIndice.py GovTxtTeste/ govTxtBase/ govInd/ govTxt.
 	 
 	  
 	III. Splitting the index in two tiers (govInd/fir_25. govInd/sec_25.) , with 25% in the first tier.. 
 	     
-	     [python Split2.py <pathIndice> <Nome do Indice.> <% (1 - 99)>]
+	     [python Split.py <pathIndice> <Nome do Indice.> <% (1 - 99)>]
 	 
-	     $: python Split2.py govInd/ govTxt. 25
+	     $: python Split.py govInd/ govTxt. 25
 	 
 	   
 	  
