@@ -9,7 +9,7 @@
 #include "queryprocessor.h"
 #include "PostingList.h"
 #include "utils/ConfigFile.h"
-#include "snippets.h"
+//#include "snippets.h"
 #include <sys/time.h>
 #include <ctime>
 #include "queryparser.h"
