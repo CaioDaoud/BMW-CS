@@ -34,6 +34,15 @@
 
 1. Build the Indexer and the QueryProcessor.
 2. Copy all runnable files to ./Try/
+	./queryProcessor
+	./geraParcial
+	./mergeParcial
+	./geraIndiceFrequencia
+	./geraNorma
+	./geraSkipListBlockMaxFix
+	./GeraDistribuicao
+	./SplitIndex
+	
  
 3. To index the documents and to split the index.
 
