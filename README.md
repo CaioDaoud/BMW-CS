@@ -33,7 +33,7 @@
 ### Try the Query Processor ###
 
 1. Build the Indexer and the QueryProcessor.
-2. Copy all runnable files to ./Try/
+2. Copy all runnable files to ./Try/:
 	./queryProcessor
 	./geraParcial
 	./mergeParcial
