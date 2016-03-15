@@ -69,9 +69,9 @@
 
 ./QueryProcessor <arq.query> <path.word> <file.result> <wand/bmw/cs> <VET/UTI/BM25> <0> <Top-k> <Entire.index> <First.index> <Second.index> <0>
 
-	I. [Wand] $: ./QueryProcessor 1000query GovIndice/GovTxt. rankingWand wand BM25 0 10  GovInd/GovTxt. GovInd/fir_25. 
+	I. [Wand] $: ./QueryProcessor 1000query GovInd/GovTxt. rankingWand wand BM25 0 10  GovInd/GovTxt. GovInd/fir_25. 
 GovInd/sec_25. 0
 
-	II. [BMW] $:    ./QueryProcessor 1000query GovIndice/GovTxt. rankingBMW  BMW  BM25 0 10  GovInd/GovTxt. GovInd/fir_25. GovInd/sec_25. 0
+	II. [BMW] $:    ./QueryProcessor 1000query GovInd/GovTxt. rankingBMW  BMW  BM25 0 10  GovInd/GovTxt. GovInd/fir_25. GovInd/sec_25. 0
 
-	III. [BMW-CS] $: ./QueryProcessor 1000query GovIndice/GovTxt. rankingCSP  CS   BM25 0 10  GovInd/GovTxt. GovInd/fir_25. GovInd/sec_25. 0
+	III. [BMW-CS] $: ./QueryProcessor 1000query GovInd/GovTxt. rankingCSP  CS   BM25 0 10  GovInd/GovTxt. GovInd/fir_25. GovInd/sec_25. 0
