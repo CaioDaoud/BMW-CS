@@ -114,6 +114,8 @@ public:
 		this->docsInfo = _docsInfo;
 		
 		this->formula = 0;
+		this->totalBlocos = 0;
+		this->totalPivot = 0;
 		this->voc = _voc;
 		this->C = 4;
 		this->F = 14;
@@ -133,8 +135,8 @@ public:
 	~queryprocessor() {
 		this->query_log.close();
 		
-	//	printf("AVG Pivots :         %lu \n", (TotalPivo  +(1000000*tp))/ this->id_consulta);
-	//	printf("AVG Descomprimidos : %lu\n",  (TotalSaltos+(1000000*ts))/this->id_consulta);
+		printf("AVG Pivots : %lu \n", (totalPivot)/this->id_consulta);
+		printf("AVG blocks : %lu \n", (totalBlocos)/this->id_consulta);
 		
 		fclose(this->fpGabarito);
 	}
@@ -153,6 +155,8 @@ public:
 
 	void setFormula(int _f) {  this->formula = _f;	}
 
+	long totalPivot;
+	long totalBlocos;
 	
 private:
 	//file to log all queries
@@ -183,6 +187,9 @@ private:
 	float min_min_score;
 	
 	int id_consulta;
+	
+	
+	
 	
 	Vocabulario *voc;
 	queryparser query_parser;

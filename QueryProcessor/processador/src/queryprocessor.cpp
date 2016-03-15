@@ -11,6 +11,9 @@
  
 
 
+extern float totalTime;
+extern struct timespec start_r, stop_r;
+
 /*Guambiara para sumir com as msg de debug. TODO: temos que comecar a usar o log4cpp*/
 #define SHOW_TIME 1
 #define SHOW_RESULTS 1
@@ -100,20 +103,20 @@ void queryprocessor::processQuery(const string query)
 {
 	int number_of_terms;
 	vector<Term> *terms;
-
-	/*Quebra a consulta em um vetor de termos presentes no vocabulario*/
-	terms = preProcessQuery(query, number_of_terms);
-		
 	int text_n_results;
 	float ideal_doc_score_text = 0.0f;
+	float time_ = 0.0f;
 
-	ideal_doc_score_text = 0;
-	
 	vector<result> *tResults = NULL;
+	/*Quebra a consulta em um vetor de termos presentes no vocabulario*/
+	terms = preProcessQuery(query, number_of_terms);
 	
 	
 	cout<<"Number_of_terms "<<number_of_terms<<" ";
 	
+	
+	clock_gettime(CLOCK_REALTIME, &start_r); 
+						
 	switch (this->process_mode){
 		
 		case WAND_MODE :
@@ -135,7 +138,13 @@ void queryprocessor::processQuery(const string query)
 			printf("------------MODO DE PROCESSAMENTO INEXISTENTE <WAND, BMW, CSP>-----------------[%d]\n",this->process_mode);
 			exit(0);
 	}
-
+	
+	clock_gettime(CLOCK_REALTIME, &stop_r);	
+	time_ = ((stop_r.tv_sec - start_r.tv_sec) + ((double)(stop_r.tv_nsec - start_r.tv_nsec)/1000000000))*1000;									
+	
+	cout<<"TEMPO "<< time_ <<endl;
+	totalTime += time_;
+	
 	sort(tResults->begin(), tResults->end(), &resultComparator);
 	mostraResults(tResults);
 	
@@ -144,8 +153,6 @@ void queryprocessor::processQuery(const string query)
 	delete tResults;
 	delete terms;
 }
-
-
 
 float queryprocessor::calcScore(const float &pre, const float &idf, const float &freq, const float &norma){
 	
@@ -401,11 +408,10 @@ vector<result>* queryprocessor::processQuery_WAND(Index *index,
 				break;
 			}
 		}
-
-		// pivot is -1 or MAXD, no item will make into topK 
-		if(pivot == -1 || plists[pivot]->currPost == MAXD)
-			break;
 		
+		// pivot is -1 or MAXD, no item will make into topK 
+		if(pivot == -1 || plists[pivot]->currPost == MAXD)	break;
+		totalPivot++;
 		// Evaluate this docID ('did') only when 'did' is equal to plists[0]->currPost
 		if( plists[pivot]->currPost == plists[0]->currPost )
 		{
@@ -455,7 +461,7 @@ vector<result>* queryprocessor::processQuery_WAND(Index *index,
 	}
 
 	
-	for (int i = 0; i < number_of_terms; ++i) {	delete plists[i];}
+	for (int i = 0; i < number_of_terms; ++i) { totalBlocos += plists[i]->total_descomprimido;	delete plists[i];}
 	delete[] plists;
 
 	return candidate_results;
@@ -541,10 +547,10 @@ vector<result>* queryprocessor::processQuery_BMW(Index *index,
 				break;
 			}
 		}
-
+		
 		// pivot is -1 or MAXD, no item will make into topK 
 		if(pivot == -1 || plists[pivot]->currPost == MAXD)    break;
-		
+		totalPivot++;
 		/* Use shallow pointers to comput BlockMaxScore to check if the pivot did can make into the top */
 		//minpivot is used to skip entries if blockmaxScore not exceed the threshold.
 		maxposs = plists[pivot]->buffer_skip_max_score[ plists[pivot]->pos_skip];	
@@ -643,7 +649,7 @@ vector<result>* queryprocessor::processQuery_BMW(Index *index,
 	}
 	
 
-	for (int i = 0; i < number_of_terms; ++i){	delete plists[i];}
+	for (int i = 0; i < number_of_terms; ++i){totalBlocos += plists[i]->total_descomprimido;	delete plists[i];}
 	delete[] plists;
 
 	return candidate_results;
@@ -744,7 +750,7 @@ vector<result> * queryprocessor::processQueryBMW_CS(Index *index,
 
 		// pivot is -1 or MAXD, no item will make into topK 
 		if(pivot == -1 || plists[pivot]->currPost == MAXD){	break; 	}
-		
+		totalPivot++;
 		did = plists[pivot]->currPost ;
 		
 		
@@ -936,14 +942,10 @@ vector<result> * queryprocessor::processQueryBMW_CS(Index *index,
 		}
 	}
 
-	for (int i = 0; i < number_of_terms; ++i) { 	
-		delete secPlists[i];	
-	}
+	for (int i = 0; i < number_of_terms; ++i) {	totalBlocos += secPlists[i]->total_descomprimido; delete secPlists[i];	}
 	delete[] secPlists;
 	
-	for (int i = 0; i < number_of_terms; ++i) {	
-		delete plists[i];	
-	}
+	for (int i = 0; i < number_of_terms; ++i) {	totalBlocos += plists[i]->total_descomprimido;	delete plists[i]; }
 	
 	delete[] plists;
 	delete(s_candidate);

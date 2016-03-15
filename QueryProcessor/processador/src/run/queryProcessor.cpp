@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <vector>
 #include <fstream>
-
 #include "queryparser.h"
 #include "queryprocessor.h"
 #include "PostingList.h"
@@ -20,11 +19,10 @@
 #include "Index.h"
 
 
-unsigned int t1=0;
-unsigned int t2=0;
-unsigned int mm=0;
-unsigned int total_clock=0;
-
+float totalTime;
+struct timespec start_r, stop_r;
+struct timespec star, sto;
+                
 
 
 int main(int argc, char **argv) {
@@ -32,7 +30,7 @@ int main(int argc, char **argv) {
 	StartConvertSemAcentos(); //inicializar conversor de caracteres:
 
     if(argc < 11) {
-        printf (" Execute\n\t%s <arq.query> <path.word> <file.result> <wand/bmw/cs> <VET/UTI/BM25> <0> <Top-k> <entire.index> <small.index> <small.index> <[Limiar inicial] 0-0/1-milMaxScore/2-maxMinScore >\n", argv[0]);
+        printf (" Execute\n\t%s <arq.query> <path.word> <file.result> <wand/bmw/cs> <VET/UTI/BM25> <0> <Top-k> <Entire.index> <First.index> <Second.index> <0>\n", argv[0]);
         
         printf ("tamanho = %d",argc);       
         
@@ -171,20 +169,13 @@ int main(int argc, char **argv) {
     printf("Heap size: %d\n", processor.getResultHeapSize());
 
     string interface = "cli";
-
+	int cont_linha=0;
     if (interface.compare("cli") == 0) {
         string query;
         if (argc > 1 ) { //tem consulta
             if(strcmp(argv[1], "-file")) {
-
-                struct timeval start, end;
-                struct timespec start_r, stop_r;
-                clock_t t;
-	
-                long mtime, seconds, useconds;
-                gettimeofday(&start, NULL);
-                int cont_linha=0;
-                ifstream in(argv[1], ifstream::in);
+				
+				ifstream in(argv[1], ifstream::in);
                 getline(in, query);
                 while(in.good())
                 {
@@ -192,30 +183,14 @@ int main(int argc, char **argv) {
 					//if(cont_linha == 10)
 					{
 						printf("\nQID: %d ", cont_linha);
-						
-						
-						clock_gettime(CLOCK_REALTIME, &start_r); 
-						
 						processor.processQuery(query);
-						
-							
-						clock_gettime(CLOCK_REALTIME, &stop_r);						
-					
-					    cout<<"TEMPO "<< ((stop_r.tv_sec - start_r.tv_sec) + ((double)(stop_r.tv_nsec - start_r.tv_nsec)/1000000000))*1000  <<endl;
-						
 					}
                     cont_linha++;
                     getline(in, query);
 
                 }
                 in.close();
-
-                gettimeofday(&end, NULL);
-                seconds  = end.tv_sec  - start.tv_sec;
-                useconds = end.tv_usec - start.tv_usec;
-                mtime = ((seconds) * 1000 + useconds/1000.0) + 0.5;
-
-                printf("\n\nTempo de processamento (ms): %ld\n", mtime);
+				
             }
         }
         else{
@@ -230,8 +205,7 @@ int main(int argc, char **argv) {
    else{
 		cout<<"ThreadPoool removed"<<endl;
    }
-	cout<<"Total time is :"<<((float)mm*1000000+(float)total_clock)*1000/(float)CLOCKS_PER_SEC<<endl;
-
+   printf("\n\n-----\nTotal Time is: %f ms \nAVG_Time is  : %f ms \n-----\n",totalTime,totalTime/cont_linha);
 
    delete docsInfo;
    delete voc;
