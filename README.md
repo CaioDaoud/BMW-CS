@@ -37,12 +37,12 @@
  
 3. To index the documents and to split the index.
 
-	a.$cd Try/
-	b.python geraIndice.py <pathColecao> <pathBase> <pathIndice> <Nome do Indice>
+	a. $cd Try/
+	b. python geraIndice.py <pathColecao> <pathBase> <pathIndice> <Nome do Indice>
 	  $:python geraIndice.py GovTxtTeste/ govTxtBase/ govInd/ govTxt.
 	  //whith this the documents are indexed in one tier, govInd/govTxt.
 	  
-	c.python Split2.py <pathIndice> <Nome do Indice.> <% (1 - 99)>
+	c. python Split2.py <pathIndice> <Nome do Indice.> <% (1 - 99)>
 	  $:python Split2.py govInd/ govTxt. 25
 	  //whith this  the index is splited in two tiers (govInd/fir_25. govInd/sec_25.) , with 25% in the first tier.
 	  
