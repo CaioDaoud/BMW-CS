@@ -1,9 +1,8 @@
 #Document Base.
-	exemplo linha do arquivo
+	
 	2121 # 	 palavra1 palavra2 
 	<docName><space><hashtag><tab><word1><space><word2>...
-
-	see example in Try/GovTxtTeste/00
+	->See examples in Try/GovTxtTeste/00
 	
 #Indexer
 	./geraParcial
